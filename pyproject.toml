@@ -1,0 +1,31 @@
+[project]
+name = "openai-anonymizer"
+version = "0.1.0"
+description = "OpenAI API compliant anonymizer proxy"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.95.0",
+    "uvicorn[standard]>=0.21.0",
+    "httpx>=0.23.0",
+    "presidio-analyzer>=2.2.0",
+    "presidio-anonymizer>=2.2.0",
+    "python-dotenv>=0.21.0",
+    "pydantic>=2.0.0",          # Updated to v2
+    "pydantic-settings>=2.0.0"  # Added for BaseSettings
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "black>=23.0",
+    "mypy>=1.0"
+]
+
+[build-system]
+requires = ["setuptools>=65.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}  # Important: tells setuptools where to find packages
+packages = ["openai_anonymizer"]  # Explicit package name
