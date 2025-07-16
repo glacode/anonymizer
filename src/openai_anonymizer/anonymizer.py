@@ -15,8 +15,10 @@ class OpenAIPayloadAnonymizer:
                 {
                     "lang_code": "en",
                     "model_name": "en_core_web_sm"
+                    # "model_name": "en_core_web_lg"
                 }
             ],
+            # "labels_to_ignore": []
         }
         provider = NlpEngineProvider(nlp_configuration=configuration)
         nlp_engine = provider.create_engine()
