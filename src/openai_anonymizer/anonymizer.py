@@ -18,11 +18,29 @@ class OpenAIPayloadAnonymizer:
                     # "model_name": "en_core_web_lg"
                 }
             ],
+            "ner_model_configuration": {
+                # Detected entities for the en_core_web_sm model are here https://spacy.io/models/en#en_core_web_sm
+                # are listed in ./listEntities.py (and are the keys in the dict below, left side of the colon)
+                # PII entities supported by Presidio are here https://microsoft.github.io/presidio/supported_entities/ 
+                # they are the values (right side of the colon) in the dict below
+                "model_to_presidio_entity_mapping": {
+                    "PERSON": "PERSON",
+                    "GPE": "LOCATION",
+                    "ORG": "ORG",
+                    # Add other mappings as needed
+                },
+                "low_score_entity_names": [],  # List of entities to ignore if low confidence
+                "labels_to_ignore": []         # List of labels to completely ignore
+            }
             # "labels_to_ignore": []
         }
         provider = NlpEngineProvider(nlp_configuration=configuration)
         nlp_engine = provider.create_engine()
-        self.analyzer = AnalyzerEngine(nlp_engine=nlp_engine)
+        self.analyzer = AnalyzerEngine(
+            nlp_engine=nlp_engine,
+            supported_languages=["en","es","it","pl"],  # or whichever languages you actually need
+            #deny_list=["CreditCardRecognizer"]  # optional: if you don't need this recognizer
+        )
         self.anonymizer = AnonymizerEngine()
 
         # Mapping for reversible anonymization
