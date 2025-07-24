@@ -27,6 +27,7 @@ class OpenAIPayloadAnonymizer:
                     "PERSON": "PERSON",
                     "GPE": "LOCATION",
                     "ORG": "ORG",
+                    "EMAIL": "EMAIL",
                     # Add other mappings as needed
                 },
                 "low_score_entity_names": [],  # List of entities to ignore if low confidence
@@ -68,7 +69,7 @@ class OpenAIPayloadAnonymizer:
 
     def anonymize_text(self, text: str) -> str:
         """Anonymize and label PII in text"""
-        results = self.analyzer.analyze(text=text, language="en")
+        results = self.analyzer.analyze(text=text, language="en", score_threshold=0.6)
         new_text = text
         offset_correction = 0
 

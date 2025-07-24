@@ -160,6 +160,7 @@ class TestOpenAIPayloadAnonymizer:
         
         # First call
         anonymized1 = anonymizer.anonymize_text(text1)
+        print(anonymizer.analyzer.analyze(text=text1, language="en"))
         assert "<PERSON_" in anonymized1
         assert "<EMAIL_ADDRESS_" in anonymized1
         
