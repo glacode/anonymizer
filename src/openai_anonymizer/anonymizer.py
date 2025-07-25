@@ -1,4 +1,4 @@
-from presidio_analyzer import AnalyzerEngine
+from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
 from presidio_anonymizer import AnonymizerEngine
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_anonymizer.entities import OperatorResult
@@ -43,6 +43,8 @@ class OpenAIPayloadAnonymizer:
             #deny_list=["CreditCardRecognizer"]  # optional: if you don't need this recognizer
         )
         self.anonymizer = AnonymizerEngine()
+        # Add custom recognizers for specific PII patterns
+        self._add_custom_recognizers()
 
         # Mapping for reversible anonymization
         self.forward_map: Dict[str, str] = {}
@@ -50,6 +52,27 @@ class OpenAIPayloadAnonymizer:
 
         # Counters per entity type
         self.entity_counters: Dict[str, int] = {}
+
+    def _add_custom_recognizers(self):
+        """Add custom pattern recognizers for specific PII types"""
+        custom_recognizers = [
+    # Username recognizer (e.g., user123, admin_456)
+    PatternRecognizer(
+        supported_entity="USERNAME",
+        deny_list=[],
+        patterns=[
+            Pattern(
+                name="username_pattern",  # Descriptive name
+                regex=r"\b[a-zA-Z](?=.*[0-9.])[a-zA-Z0-9_.-]{2,}\b",  # Your regex
+                score=0.9  # Confidence score (0-1)
+            )
+        ],
+        context=["user", "login", "username", "handle", "account"],
+        supported_language="en"
+    )
+]
+        for recognizer in custom_recognizers:
+            self.analyzer.registry.add_recognizer(recognizer)
 
     def _get_label(self, entity_type: str) -> str:
         """Generate sequential anonymized labels like <PERSON_1>"""

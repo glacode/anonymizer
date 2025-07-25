@@ -70,7 +70,7 @@ class TestOpenAIPayloadAnonymizer:
         
         # Check user field was anonymized
         assert "user123" not in anonymized["user"]
-        assert "<PERSON_" in anonymized["user"]
+        assert anonymized["user"] == "<USERNAME_1>"
         
         # Check other fields unchanged
         assert anonymized["other_field"] == "unchanged"
