@@ -1,15 +1,17 @@
-from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
-from presidio_anonymizer import AnonymizerEngine
+from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer, RecognizerResult
+from presidio_anonymizer import AnonymizerEngine, EngineResult, OperatorConfig, DeanonymizeEngine
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_anonymizer.entities import OperatorResult
-from typing import Dict, Any
-import re
+from typing import Dict, Any, List
+
+from .InstanceCounterAnonymizer import InstanceCounterAnonymizer
+from .InstanceCounterDeanonymizer import InstanceCounterDeanonymizer
 
 
 class OpenAIPayloadAnonymizer:
     def __init__(self):
         # NLP setup
-        configuration = {
+        configuration : dict[str, Any] = {
             "nlp_engine_name": "spacy",
             "models": [
                 {
@@ -28,6 +30,7 @@ class OpenAIPayloadAnonymizer:
                     "GPE": "LOCATION",
                     "ORG": "ORG",
                     "EMAIL": "EMAIL",
+                    "PHONE_NUMBER": "PHONE_NUMBER",
                     # Add other mappings as needed
                 },
                 "low_score_entity_names": [],  # List of entities to ignore if low confidence
@@ -42,9 +45,19 @@ class OpenAIPayloadAnonymizer:
             supported_languages=["en","es","it","pl"],  # or whichever languages you actually need
             #deny_list=["CreditCardRecognizer"]  # optional: if you don't need this recognizer
         )
-        self.anonymizer = AnonymizerEngine()
+
         # Add custom recognizers for specific PII patterns
         self._add_custom_recognizers()
+
+        self.anonymizerEngine = AnonymizerEngine()
+        self.anonymizerEngine.add_anonymizer( InstanceCounterAnonymizer )
+
+        # Create a mapping between entity types and counters
+        self.entity_mapping = dict[str, int]()
+
+        self.deanonymizer_engine = DeanonymizeEngine()
+
+        self.deanonymizer_engine.add_deanonymizer( InstanceCounterDeanonymizer )
 
         # Mapping for reversible anonymization
         self.forward_map: Dict[str, str] = {}
@@ -56,21 +69,42 @@ class OpenAIPayloadAnonymizer:
     def _add_custom_recognizers(self):
         """Add custom pattern recognizers for specific PII types"""
         custom_recognizers = [
-    # Username recognizer (e.g., user123, admin_456)
-    PatternRecognizer(
-        supported_entity="USERNAME",
-        deny_list=[],
-        patterns=[
-            Pattern(
-                name="username_pattern",  # Descriptive name
-                regex=r"\b[a-zA-Z](?=.*[0-9.])[a-zA-Z0-9_.-]{2,}\b",  # Your regex
-                score=0.9  # Confidence score (0-1)
-            )
-        ],
-        context=["user", "login", "username", "handle", "account"],
-        supported_language="en"
-    )
-]
+        # Username recognizer (e.g., user123, admin_456)
+        PatternRecognizer(
+            supported_entity="USERNAME",
+            deny_list=[],
+            patterns=[
+                Pattern(
+                    name="username_pattern",  # Descriptive name
+                    regex=r"\b(?=\w*[a-zA-Z])(?=\w*\d)\w{5,}\b",  # Your regex
+                    score=0.9  # Confidence score (0-1)
+                )
+            ],
+            context=["user", "login", "username", "handle", "account"],
+            supported_language="en"
+        ),
+        PatternRecognizer(
+            supported_entity="PHONE_NUMBER",
+            deny_list=[],  # You can add specific numbers to deny if needed
+            patterns=[
+                Pattern(
+                        name="flexible_phone_number_pattern",
+                        # This regex aims to match common US phone number formats, including 7-digit ones:
+                        # (123) 456-7890
+                        # 123-456-7890
+                        # 123.456.7890
+                        # 123 456 7890
+                        # +1 123-456-7890 (optional country code)
+                        # 555-1234 (7-digit format)
+                        # 5551234 (7-digit format without hyphen)
+                        regex=r"\b(?:\+?\d{1,3}[-. ]?)?(?:\(?\d{3}\)?[-. ]?)?\d{3}[-. ]?\d{4}\b",
+                        score=0.9
+                    )
+            ],
+            context=["phone", "contact", "mobile", "call"],
+            supported_language="en"
+        )
+        ]
         for recognizer in custom_recognizers:
             self.analyzer.registry.add_recognizer(recognizer)
 
@@ -90,31 +124,51 @@ class OpenAIPayloadAnonymizer:
         self.reverse_map[label] = text
         return label
 
-    def anonymize_text(self, text: str) -> str:
+    def anonymize_text(self, text: str) -> EngineResult:
         """Anonymize and label PII in text"""
-        results = self.analyzer.analyze(text=text, language="en", score_threshold=0.6)
-        new_text = text
-        offset_correction = 0
+        analyzer_results : List[RecognizerResult] = self.analyzer.analyze(text=text, language="en", score_threshold=0.6)
+        # new_text = text
+        # offset_correction = 0
 
-        for result in sorted(results, key=lambda r: r.start):
-            original_value = text[result.start:result.end]
-            label = self._anonymize_entity(original_value, result.entity_type)
+        # for result in sorted(results, key=lambda r: r.start):
+        #     original_value = text[result.start:result.end]
+        #     label = self._anonymize_entity(original_value, result.entity_type)
 
-            # Replace original value with label (accounting for previous replacements)
-            start = result.start + offset_correction
-            end = result.end + offset_correction
-            new_text = new_text[:start] + label + new_text[end:]
-            offset_correction += len(label) - (result.end - result.start)
+        #     # Replace original value with label (accounting for previous replacements)
+        #     start = result.start + offset_correction
+        #     end = result.end + offset_correction
+        #     new_text = new_text[:start] + label + new_text[end:]
+        #     offset_correction += len(label) - (result.end - result.start)
+        anonymized_result = self.anonymizerEngine.anonymize(
+            text=text,
+            analyzer_results=analyzer_results,  # type: ignore
+            operators={
+                "DEFAULT": OperatorConfig(
+                    "entity_counter", {"entity_mapping": self.entity_mapping}
+                )
+            },
+        )
+        # new_text = anonymized_result.text
 
-        return new_text
+        return anonymized_result
 
-    def deanonymize_text(self, text: str) -> str:
+    def deanonymize_text(self, text: str, operator_results: List[OperatorResult]) -> str:
         """Replace placeholders like <PERSON_1> with original values"""
-        def replace_match(match):
-            token = match.group(0)
-            return self.reverse_map.get(token, token)
+        # def replace_match(match):
+        #     token = match.group(0)
+        #     return self.reverse_map.get(token, token)
 
-        return re.sub(r"<[A-Z_]+_\d+>", replace_match, text)
+        # return re.sub(r"<[A-Z_]+_\d+>", replace_match, text)
+        anonymized_result = self.deanonymizer_engine.deanonymize(
+            text=text,
+            entities=operator_results,
+            operators={
+                "DEFAULT": OperatorConfig(
+                    "entity_counter_deanonymizer", {"entity_mapping": self.entity_mapping}
+                )
+            },
+        )
+        return anonymized_result.text
 
     def anonymize_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Anonymize content in OpenAI API request"""
