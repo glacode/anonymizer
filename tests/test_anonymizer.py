@@ -1,5 +1,5 @@
+import copy
 from typing import Any, Dict
-from presidio_anonymizer import EngineResult
 import pytest
 from openai_anonymizer.anonymizer import OpenAIPayloadAnonymizer
 
@@ -69,17 +69,17 @@ class TestOpenAIPayloadAnonymizer:
         anonymized = anonymizer.anonymize_payload(payload)
         
         # Check messages were anonymized
-        anonymized0 : EngineResult = anonymized["messages"][0]["content"]
-        anonymized1 : EngineResult = anonymized["messages"][1]["content"]
-        assert "John Doe" not in anonymized0.text
-        assert "John Doe" not in anonymized1.text
-        assert "<PERSON_" in anonymized0.text
-        assert "<PERSON_" in anonymized1.text
+        anonymized0 : str = anonymized["messages"][0]["content"]
+        anonymized1 : str = anonymized["messages"][1]["content"]
+        assert "John Doe" not in anonymized0
+        assert "John Doe" not in anonymized1
+        assert "<PERSON_" in anonymized0
+        assert "<PERSON_" in anonymized1
 
         # Check user field was anonymized
-        anonymized_user: EngineResult = anonymized["user"]
-        assert "user123" not in anonymized_user.text
-        assert anonymized_user.text == "<USERNAME_0>"
+        anonymized_user: str = anonymized["user"]
+        assert "user123" not in anonymized_user
+        assert anonymized_user == "<USERNAME_0>"
 
         # Check other fields unchanged is not even anonymized
         assert isinstance(anonymized["other_field"], str)
@@ -87,7 +87,7 @@ class TestOpenAIPayloadAnonymizer:
 
     def test_deanonymize_payload(self, anonymizer: OpenAIPayloadAnonymizer):
         """Test payload deanonymization"""
-        original_payload = {
+        original_payload : Dict[str, Any] = {
             "messages": [
                 {"role": "user", "content": "My name is John Doe"},
                 {"role": "assistant", "content": "Hello John Doe"}
@@ -95,13 +95,17 @@ class TestOpenAIPayloadAnonymizer:
             "user": "user123"
         }
         
+        deep_copy = copy.deepcopy(original_payload)
+        
         # First anonymize
-        anonymized = anonymizer.anonymize_payload(original_payload)
+        anonymized = anonymizer.anonymize_payload(deep_copy)
         
         # Then deanonymize
         deanonymized = anonymizer.deanonymize_payload(anonymized)
         
         # Check it matches original
+        assert original_payload["messages"]== deanonymized["messages"]
+        assert original_payload["user"] == deanonymized["user"]
         assert deanonymized == original_payload
 
     def test_empty_text(self, anonymizer: OpenAIPayloadAnonymizer):
@@ -158,8 +162,10 @@ class TestOpenAIPayloadAnonymizer:
             "user": "test@example.com",
             "session_id": "session123"
         }
-        
-        anonymized = anonymizer.anonymize_payload(original)
+
+        deep_copy = copy.deepcopy(original)
+
+        anonymized = anonymizer.anonymize_payload(deep_copy)
         deanonymized = anonymizer.deanonymize_payload(anonymized)
         
         assert deanonymized == original

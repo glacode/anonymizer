@@ -2,7 +2,7 @@ from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer, Recogn
 from presidio_anonymizer import AnonymizerEngine, EngineResult, OperatorConfig, DeanonymizeEngine
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_anonymizer.entities import OperatorResult
-from typing import Dict, Any, List
+from typing import Dict, Any, List, cast
 
 from .InstanceCounterAnonymizer import InstanceCounterAnonymizer
 from .InstanceCounterDeanonymizer import InstanceCounterDeanonymizer
@@ -171,24 +171,52 @@ class OpenAIPayloadAnonymizer:
         return anonymized_result.text
 
     def anonymize_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Anonymize content in OpenAI API request"""
-        if "messages" in payload:
-            for message in payload["messages"]:
-                if "content" in message and isinstance(message["content"], str):
-                    message["content"] = self.anonymize_text(message["content"])
-
-        for field in ["user", "session_id"]:
-            if field in payload and isinstance(payload[field], str):
-                payload[field] = self.anonymize_text(payload[field])
-
-        return payload
+        """Recursively anonymize all string leaf values in a JSON-like payload"""
+        def recursive_anonymize(obj: Any) -> Any:
+            if isinstance(obj, dict):
+                obj_dict = cast(dict[Any, Any], obj)
+                return {k: recursive_anonymize(v) for k, v in obj_dict.items()}
+            elif isinstance(obj, list):
+                obj_list = cast(list[Any], obj)
+                return [recursive_anonymize(item) for item in obj_list]
+            elif isinstance(obj, str):
+                # Assuming anonymize_text() returns an object with a .text attribute
+                return self.anonymize_text(obj).text
+            else:
+                return obj
+        return recursive_anonymize(payload)
 
     def deanonymize_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Restore original content from anonymized OpenAI API response"""
-        if "choices" in payload:
-            for choice in payload["choices"]:
-                message = choice.get("message", {})
-                if "content" in message and isinstance(message["content"], str):
-                    message["content"] = self.deanonymize_text(message["content"])
+        self._create_reverse_map()
+        # Recursively restore original values in payload using reverse_map
+        return self._recursive_deanonymize(payload)
+    
+    def _create_reverse_map(self):
+        # Create reverse mapping (anonymized_token → real_value)
+        entity_mapping = cast(Dict[str, Dict[str, str]], self.entity_mapping)
+        self.reverse_map: Dict[str, str] = {}
+        for _entity_type, mappings in entity_mapping.items():
+            for real_value, anonymized_token in mappings.items():
+                self.reverse_map[anonymized_token] = real_value
 
-        return payload
+    def _recursive_deanonymize(self, obj: Any) -> Any:
+        """Helper to recursively deanonymize strings in dicts/lists"""
+        if isinstance(obj, dict):
+            obj_dict = cast(dict[Any, Any], obj)
+            return { key: self._recursive_deanonymize(value) for key, value in obj_dict.items() }
+        elif isinstance(obj, list):
+            obj_list = cast(list[Any], obj)
+            return [self._recursive_deanonymize(item) for item in obj_list]
+        elif isinstance(obj, str):
+            return self._deanonymize_string(obj)
+        else:
+            return obj
+
+    def _deanonymize_string(self, text: str) -> str:
+        """Replace all anonymized tokens in a string using reverse_map"""
+        # deanonymized: str = self.deanonymize_text(s, [])
+        # Replace each anonymized token with its original value
+        for anonymized_token, real_value in self.reverse_map.items():
+            text = text.replace(anonymized_token, real_value)
+        
+        return text
