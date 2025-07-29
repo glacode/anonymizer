@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     load_dotenv()
-    openai_api_key: str = os.environ.get("HF_TOKEN")
+    openai_api_key: str | None = os.environ.get("HF_TOKEN")
     # openai_api_url: str = "https://api.openai.com/v1/chat/completions"
     openai_api_url: str = "https://router.huggingface.co/v1/chat/completions"
     # anonymizer_salt: str = "change-me-in-production"

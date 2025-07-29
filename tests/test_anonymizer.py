@@ -180,11 +180,14 @@ class TestOpenAIPayloadAnonymizer:
         print(anonymizer.analyzer.analyze(text=text1, language="en"))
         assert "<PERSON_" in anonymized1.text
         assert "<EMAIL_ADDRESS_" in anonymized1.text
+        assert anonymized1.text == "Contact <PERSON_0> at <EMAIL_ADDRESS_0>"
 
         # Second call
         anonymized2 = anonymizer.anonymize_text(text2)
         assert "<PERSON_" in anonymized2.text
         assert "<PHONE_NUMBER_" in anonymized2.text
+        assert anonymized2.text == "<PERSON_0>'s number is <PHONE_NUMBER_0>"
+
 
         # Check same person tag was used
         person_tag = [word for word in anonymized1.text.split() if word.startswith("<PERSON_")][0]
@@ -196,3 +199,16 @@ class TestOpenAIPayloadAnonymizer:
 
         assert deanonymized1 == text1
         assert deanonymized2 == text2
+
+    def test_multiple_entities_of_the_same_type(self, anonymizer: OpenAIPayloadAnonymizer):
+        """Test that multiple entities of the same type are handled correctly"""
+        text = "Alice and Bob are friends. They both work at Acme Corp."
+        anonymized = anonymizer.anonymize_text(text)
+
+        assert "<PERSON_" in anonymized.text
+        assert "<ORG_" in anonymized.text
+        assert anonymized.text == "<PERSON_2> and <PERSON_0> are friends. They both work at <ORG_0>"
+
+        deanonymized = anonymizer.deanonymize_text(anonymized.text, anonymized.items)
+        assert deanonymized == text
+        assert deanonymized == "Alice and Bob are friends. They both work at Acme Corp."
