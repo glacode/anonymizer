@@ -1,14 +1,12 @@
 from typing import Dict
-
 from presidio_anonymizer.operators import Operator, OperatorType
-
 
 # see this example here https://microsoft.github.io/presidio/samples/python/pseudonymization/
 
 class InstanceCounterAnonymizer(Operator):
     """
     Anonymizer which replaces the entity value
-    with an instance counter per entity.
+    with an instance counter per entity type.
     """
 
     REPLACING_FORMAT = "<{entity_type}_{index}>"
@@ -17,38 +15,32 @@ class InstanceCounterAnonymizer(Operator):
         """Anonymize the input text."""
 
         entity_type: str = params["entity_type"]
+        entity_mapping: Dict[str, Dict[str, str]] = params["entity_mapping"]
 
-        # entity_mapping is a dict of dicts containing mappings per entity type
-        entity_mapping: Dict[Dict:str] = params["entity_mapping"]
+        # Optional: pass ordered list of entities per type
+        ordered_values: list[str] = params.get("ordered_values", {}).get(entity_type, [])
 
-        entity_mapping_for_type = entity_mapping.get(entity_type)
-        if not entity_mapping_for_type:
-            new_text = self.REPLACING_FORMAT.format(
-                entity_type=entity_type, index=0
-            )
-            entity_mapping[entity_type] = {}
+        entity_mapping_for_type = entity_mapping.setdefault(entity_type, {})
 
+        if text in entity_mapping_for_type:
+            return entity_mapping_for_type[text]
+
+        # Find its index in the expected order (if possible)
+        if ordered_values and text in ordered_values:
+            index = ordered_values.index(text)
         else:
-            if text in entity_mapping_for_type:
-                return entity_mapping_for_type[text]
+            # fallback: assign a new index based on the current size of the mapping
+            index = len(entity_mapping_for_type)
 
-            previous_index = self._get_last_index(entity_mapping_for_type)
-            new_text = self.REPLACING_FORMAT.format(
-                entity_type=entity_type, index=previous_index + 1
-            )
+        new_text = self.REPLACING_FORMAT.format(entity_type=entity_type, index=index)
 
-        entity_mapping[entity_type][text] = new_text
+        entity_mapping_for_type[text] = new_text
         return new_text
-
-    @staticmethod
-    def _get_last_index(entity_mapping_for_type: Dict) -> int:
-        """Get the last index for a given entity type."""
-        return len(entity_mapping_for_type)
 
     def validate(self, params: Dict = None) -> None:
         """Validate operator parameters."""
 
-        if "entity_mapping" not in params:
+        if not params or "entity_mapping" not in params:
             raise ValueError("An input Dict called `entity_mapping` is required.")
         if "entity_type" not in params:
             raise ValueError("An entity_type param is required.")

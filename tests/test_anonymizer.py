@@ -207,7 +207,7 @@ class TestOpenAIPayloadAnonymizer:
 
         assert "<PERSON_" in anonymized.text
         assert "<ORG_" in anonymized.text
-        assert anonymized.text == "<PERSON_2> and <PERSON_0> are friends. They both work at <ORG_0>"
+        assert anonymized.text == "<PERSON_0> and <PERSON_1> are friends. They both work at <ORG_0>"
 
         deanonymized = anonymizer.deanonymize_text(anonymized.text, anonymized.items)
         assert deanonymized == text

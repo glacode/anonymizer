@@ -127,30 +127,39 @@ class OpenAIPayloadAnonymizer:
     def anonymize_text(self, text: str) -> EngineResult:
         """Anonymize and label PII in text"""
         analyzer_results : List[RecognizerResult] = self.analyzer.analyze(text=text, language="en", score_threshold=0.6)
-        # new_text = text
-        # offset_correction = 0
 
-        # for result in sorted(results, key=lambda r: r.start):
-        #     original_value = text[result.start:result.end]
-        #     label = self._anonymize_entity(original_value, result.entity_type)
+        ordered_values: Dict[str, list[str]] = {}
 
-        #     # Replace original value with label (accounting for previous replacements)
-        #     start = result.start + offset_correction
-        #     end = result.end + offset_correction
-        #     new_text = new_text[:start] + label + new_text[end:]
-        #     offset_correction += len(label) - (result.end - result.start)
+        self.order_entities_in_order_of_appearence(text, analyzer_results, ordered_values)
+
         anonymized_result = self.anonymizerEngine.anonymize(
             text=text,
             analyzer_results=analyzer_results,  # type: ignore
             operators={
                 "DEFAULT": OperatorConfig(
-                    "entity_counter", {"entity_mapping": self.entity_mapping}
+                    "entity_counter",
+                    {
+                        "entity_mapping": self.entity_mapping,
+                        "ordered_values": ordered_values
+                    }
                 )
             },
         )
         # new_text = anonymized_result.text
 
         return anonymized_result
+
+    # the method below is used to order entities in the order they appear in the text
+    # so that in the text "Alice and Bob are friends" will be anonymized as
+    # "<PERSON_0> and <PERSON_1> are friends" and not "<PERSON_1> and <PERSON_0> are friends"
+    def order_entities_in_order_of_appearence(self, text, analyzer_results, ordered_values):
+        for r in analyzer_results:
+            r_text = text[r.start:r.end]
+            entity_type = r.entity_type
+            if entity_type not in ordered_values:
+                ordered_values[entity_type] = []
+            if r_text not in ordered_values[entity_type]:
+                ordered_values[entity_type].append(r_text)
 
     def deanonymize_text(self, text: str, operator_results: List[OperatorResult]) -> str:
         """Replace placeholders like <PERSON_1> with original values"""
