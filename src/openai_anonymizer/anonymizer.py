@@ -4,6 +4,7 @@ from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_anonymizer.entities import OperatorResult
 from typing import Dict, Any, List, cast
 
+from .custom_recognizers.randomSecretRecognizer import RandomSecretRecognizer
 from .InstanceCounterAnonymizer import InstanceCounterAnonymizer
 from .InstanceCounterDeanonymizer import InstanceCounterDeanonymizer
 
@@ -45,6 +46,7 @@ class OpenAIPayloadAnonymizer:
             supported_languages=["en","es","it","pl"],  # or whichever languages you actually need
             #deny_list=["CreditCardRecognizer"]  # optional: if you don't need this recognizer
         )
+        self.analyzer.registry.add_recognizer(RandomSecretRecognizer())
 
         # Add custom recognizers for specific PII patterns
         self._add_custom_recognizers()
@@ -152,7 +154,7 @@ class OpenAIPayloadAnonymizer:
     # the method below is used to order entities in the order they appear in the text
     # so that in the text "Alice and Bob are friends" will be anonymized as
     # "<PERSON_0> and <PERSON_1> are friends" and not "<PERSON_1> and <PERSON_0> are friends"
-    def order_entities_in_order_of_appearence(self, text, analyzer_results, ordered_values):
+    def order_entities_in_order_of_appearence(self, text: str, analyzer_results: list[RecognizerResult], ordered_values: Dict[str, list[str]]):
         for r in analyzer_results:
             r_text = text[r.start:r.end]
             entity_type = r.entity_type
