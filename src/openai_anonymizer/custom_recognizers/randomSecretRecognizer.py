@@ -1,6 +1,7 @@
 # pyright: reportUntypedBaseClass=false
 
 import re
+from typing import Iterator
 from presidio_analyzer import RecognizerResult, EntityRecognizer
 from presidio_analyzer.nlp_engine import NlpArtifacts
 
@@ -29,8 +30,9 @@ class RandomSecretRecognizer(EntityRecognizer):
 
     def find_potential_secrets(self, text: str):
         # Basic candidate: long-ish word-like strings (>= MIN_LENGTH)
-        pattern = rf"\b[\w!@#$%^&*()\-_=+]{{{self.MIN_LENGTH},}}\b"
-        return re.finditer(pattern, text)
+        pattern = rf"\b[\w!@#$%^&*()\-_=+]{{{self.MIN_LENGTH},}}"
+        matches : Iterator[re.Match[str]]= re.finditer(pattern, text)
+        return matches
 
     def estimate_confidence(self, value: str) -> float:
         classes = {

@@ -216,16 +216,16 @@ class TestOpenAIPayloadAnonymizer:
     def test_random_secret_anonymization(self, anonymizer: OpenAIPayloadAnonymizer):
         """Test anonymization of moderate-entropy secrets using RANDOM_SECRET recognizer"""
         # Example that should be detected: includes digit + symbol, and is at least 8 chars
-        original = "My token is: 1!23456A"
+        original = "My token is: 1!23456A and some text follow"
         
         anonymized = anonymizer.anonymize_text(original)
-        print("Anonymized:", anonymized.text)
 
         # Check that the secret was replaced
         assert "<RANDOM_SECRET_0>" in anonymized.text, "Secret not anonymized"
         assert "1!23456A" not in anonymized.text, "Original secret still present"
+        assert anonymized.text == "My token is: <RANDOM_SECRET_0> and some text follow"
 
-        # Optional: Test deanonymization
+        # Test deanonymization
         deanonymized = anonymizer.deanonymize_text(
             anonymized.text,
             operator_results=anonymized.items
@@ -242,6 +242,30 @@ class TestOpenAIPayloadAnonymizer:
     def test_random_secret_parametrized(self, anonymizer: OpenAIPayloadAnonymizer, secret: str):
         """Ensure multiple random-like secrets are caught by RANDOM_SECRET"""
         original = f"My secret is: {secret}"
+        
+        anonymized = anonymizer.anonymize_text(original)
+        print("Anonymized:", anonymized.text)
+
+        assert "<RANDOM_SECRET_0>" in anonymized.text
+        assert secret not in anonymized.text
+
+        # Optional: check round-trip
+        deanonymized = anonymizer.deanonymize_text(
+            anonymized.text,
+            operator_results=anonymized.items
+        )
+        assert deanonymized == original
+
+    @pytest.mark.parametrize("secret", [
+        "1!23456A",        # digit + symbol + upper
+        "hunter2!",        # lower + digit + symbol
+        "P@ssword",        # upper + lower + symbol
+        "sk-123abcXYZ",    # typical API key
+        "Zx8#Fg7*",        # symbol-heavy
+    ])
+    def test_random_secret_in_the_middle_parametrized(self, anonymizer: OpenAIPayloadAnonymizer, secret: str):
+        """Ensure multiple random-like secrets are caught by RANDOM_SECRET"""
+        original = f"My secret is: {secret} ; but some text follows"
         
         anonymized = anonymizer.anonymize_text(original)
         print("Anonymized:", anonymized.text)
