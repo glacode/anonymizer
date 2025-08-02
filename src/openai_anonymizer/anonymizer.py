@@ -105,6 +105,25 @@ class OpenAIPayloadAnonymizer:
             ],
             context=["phone", "contact", "mobile", "call"],
             supported_language="en"
+        ),
+        # IP address recognizer for IPv4 and IPv6
+        PatternRecognizer(
+            supported_entity="IP_ADDRESS",
+            deny_list=[],
+            patterns=[
+                Pattern(
+                    name="ipv4_pattern",
+                    regex=r"\b(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}\b",
+                    score=0.9
+                ),
+                Pattern(
+                    name="ipv6_pattern",
+                    regex=r"\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b",
+                    score=0.9
+                )
+            ],
+            context=["ip", "address", "network", "internet", "location"],
+            supported_language="en"
         )
         ]
         for recognizer in custom_recognizers:

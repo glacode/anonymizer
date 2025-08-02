@@ -66,24 +66,26 @@ class TestOpenAIPayloadAnonymizer:
             "other_field": "unchanged"
         }
         
-        anonymized = anonymizer.anonymize_payload(payload)
+        anonymized: Dict[str, Any] = anonymizer.anonymize_payload(payload)
         
         # Check messages were anonymized
-        anonymized0 : str = anonymized["messages"][0]["content"]
-        anonymized1 : str = anonymized["messages"][1]["content"]
-        assert "John Doe" not in anonymized0
-        assert "John Doe" not in anonymized1
-        assert "<PERSON_" in anonymized0
-        assert "<PERSON_" in anonymized1
+        message0: Dict[str, Any] = anonymized["messages"][0]
+        message1: Dict[str, Any] = anonymized["messages"][1]
+        content0: str = message0["content"]
+        content1: str = message1["content"]
+        assert "John Doe" not in content0
+        assert "John Doe" not in content1
+        assert "<PERSON_" in content0
+        assert "<PERSON_" in content1
 
         # Check user field was anonymized
-        anonymized_user: str = anonymized["user"]
-        assert "user123" not in anonymized_user
-        assert anonymized_user == "<USERNAME_0>"
+        user_field: str = anonymized["user"]
+        assert "user123" not in user_field
+        assert user_field == "<USERNAME_0>"
 
-        # Check other fields unchanged is not even anonymized
-        assert isinstance(anonymized["other_field"], str)
-        assert anonymized["other_field"] == "unchanged"
+        # Check other fields unchanged
+        other_field: str = anonymized["other_field"]
+        assert other_field == "unchanged"
 
     def test_deanonymize_payload(self, anonymizer: OpenAIPayloadAnonymizer):
         """Test payload deanonymization"""
@@ -95,16 +97,16 @@ class TestOpenAIPayloadAnonymizer:
             "user": "user123"
         }
         
-        deep_copy = copy.deepcopy(original_payload)
+        deep_copy: Dict[str, Any] = copy.deepcopy(original_payload)
         
         # First anonymize
-        anonymized = anonymizer.anonymize_payload(deep_copy)
+        anonymized: Dict[str, Any] = anonymizer.anonymize_payload(deep_copy)
         
         # Then deanonymize
-        deanonymized = anonymizer.deanonymize_payload(anonymized)
+        deanonymized: Dict[str, Any] = anonymizer.deanonymize_payload(anonymized)
         
         # Check it matches original
-        assert original_payload["messages"]== deanonymized["messages"]
+        assert original_payload["messages"] == deanonymized["messages"]
         assert original_payload["user"] == deanonymized["user"]
         assert deanonymized == original_payload
 
@@ -163,10 +165,10 @@ class TestOpenAIPayloadAnonymizer:
             "session_id": "session123"
         }
 
-        deep_copy = copy.deepcopy(original)
+        deep_copy: Dict[str, Any] = copy.deepcopy(original)
 
-        anonymized = anonymizer.anonymize_payload(deep_copy)
-        deanonymized = anonymizer.deanonymize_payload(anonymized)
+        anonymized: Dict[str, Any] = anonymizer.anonymize_payload(deep_copy)
+        deanonymized: Dict[str, Any] = anonymizer.deanonymize_payload(anonymized)
         
         assert deanonymized == original
 
@@ -279,3 +281,61 @@ class TestOpenAIPayloadAnonymizer:
             operator_results=anonymized.items
         )
         assert deanonymized == original
+
+    def test_ip_address_anonymization(self, anonymizer: OpenAIPayloadAnonymizer):
+        """Test IP address anonymization (IPv4 and IPv6)"""
+        text = "Server IP is 192.168.1.1 and IPv6 is 2001:0db8:85a3:0000:0000:8a2e:0370:7334"
+        anonymized = anonymizer.anonymize_text(text)
+        
+        # Check that IPs were replaced
+        assert "192.168.1.1" not in anonymized.text
+        assert "2001:0db8:85a3:0000:0000:8a2e:0370:7334" not in anonymized.text
+        assert "<IP_ADDRESS_" in anonymized.text
+        
+        # Should have two distinct IP tags
+        assert anonymized.text.count("<IP_ADDRESS_") == 2
+        
+        # Check non-PII remains
+        assert "Server IP is" in anonymized.text
+        assert "and IPv6 is" in anonymized.text
+
+    def test_ip_address_deanonymization(self, anonymizer: OpenAIPayloadAnonymizer):
+        """Test IP address deanonymization"""
+        original = "Connection from 10.0.0.1 to fe80::1ff:fe23:4567:890a"
+        anonymized = anonymizer.anonymize_text(original)
+        deanonymized = anonymizer.deanonymize_text(
+            anonymized.text,
+            operator_results=anonymized.items
+        )
+        
+        assert deanonymized == original
+
+    def test_multiple_ip_types(self, anonymizer: OpenAIPayloadAnonymizer):
+        """Test handling of multiple IP types mixed with other entities"""
+        text = "Admin (alice@example.com) logged in from 172.16.254.1 and ::1"
+        anonymized = anonymizer.anonymize_text(text)
+        
+        assert "<EMAIL_ADDRESS_" in anonymized.text
+        assert "<IP_ADDRESS_" in anonymized.text
+        assert "alice@example.com" not in anonymized.text
+        assert "172.16.254.1" not in anonymized.text
+        assert "::1" not in anonymized.text
+
+    def test_ip_in_payload(self, anonymizer: OpenAIPayloadAnonymizer):
+        """Test IP addresses in JSON payloads"""
+        payload: Dict[str, str] = {
+            "ip": "203.0.113.5",
+            "message": "Request from 2001:db8::ff00:42:8329",
+            "user": "remote_user"
+        }
+        
+        anonymized = anonymizer.anonymize_payload(payload)
+        deanonymized = anonymizer.deanonymize_payload(anonymized)
+        
+        # Check round-trip consistency
+        assert deanonymized == payload
+        
+        # Verify anonymization occurred
+        assert "<IP_ADDRESS_" in anonymized["ip"]
+        assert "<IP_ADDRESS_" in anonymized["message"]
+        assert "<USERNAME_" in anonymized["user"]
