@@ -118,7 +118,8 @@ class OpenAIPayloadAnonymizer:
                 ),
                 Pattern(
                     name="ipv6_pattern",
-                    regex=r"\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b",
+                    # Robust fix: Use negative lookarounds
+                    regex=r"(?<![0-9a-fA-F:])(?:(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|::1|(?:[0-9a-fA-F]{1,4}:){1,7}:)(?![0-9a-fA-F:])",
                     score=0.9
                 )
             ],

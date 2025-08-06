@@ -179,7 +179,6 @@ class TestOpenAIPayloadAnonymizer:
         
         # First call
         anonymized1 = anonymizer.anonymize_text(text1)
-        print(anonymizer.analyzer.analyze(text=text1, language="en"))
         assert "<PERSON_" in anonymized1.text
         assert "<EMAIL_ADDRESS_" in anonymized1.text
         assert anonymized1.text == "Contact <PERSON_0> at <EMAIL_ADDRESS_0>"
@@ -214,6 +213,16 @@ class TestOpenAIPayloadAnonymizer:
         deanonymized = anonymizer.deanonymize_text(anonymized.text, anonymized.items)
         assert deanonymized == text
         assert deanonymized == "Alice and Bob are friends. They both work at Acme Corp."
+
+    def test_anonymize_text_multiple_entities_in_two_calls(self, anonymizer: OpenAIPayloadAnonymizer):
+        """Test that multiple entities of the same type are handled correctly even in two subsequent calls"""
+        text = "John is a person"
+        anonymized = anonymizer.anonymize_text(text)
+        assert "<PERSON_0" in anonymized.text
+
+        text = "Bob is a person"
+        anonymized = anonymizer.anonymize_text(text)
+        assert "<PERSON_1" in anonymized.text 
     
     def test_random_secret_anonymization(self, anonymizer: OpenAIPayloadAnonymizer):
         """Test anonymization of moderate-entropy secrets using RANDOM_SECRET recognizer"""
@@ -284,7 +293,7 @@ class TestOpenAIPayloadAnonymizer:
 
     def test_ip_address_anonymization(self, anonymizer: OpenAIPayloadAnonymizer):
         """Test IP address anonymization (IPv4 and IPv6)"""
-        text = "Server IP is 192.168.1.1 and IPv6 is 2001:0db8:85a3:0000:0000:8a2e:0370:7334"
+        text = "server ip is 192.168.1.1 and ipv6 is 2001:0db8:85a3:0000:0000:8a2e:0370:7334"
         anonymized = anonymizer.anonymize_text(text)
         
         # Check that IPs were replaced
@@ -296,8 +305,8 @@ class TestOpenAIPayloadAnonymizer:
         assert anonymized.text.count("<IP_ADDRESS_") == 2
         
         # Check non-PII remains
-        assert "Server IP is" in anonymized.text
-        assert "and IPv6 is" in anonymized.text
+        assert "server ip is" in anonymized.text
+        assert "and ipv6 is" in anonymized.text
 
     def test_ip_address_deanonymization(self, anonymizer: OpenAIPayloadAnonymizer):
         """Test IP address deanonymization"""
